@@ -1,0 +1,9 @@
+{
+  "files.exclude": {
+    "target": true,
+    ".gitignore": true,
+    "Cargo.lock": true,
+    ".vs": true,
+    ".vscode": true
+  }
+}
