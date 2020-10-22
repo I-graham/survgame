@@ -1,8 +1,9 @@
 use std::env;
 
-mod common;
+mod utils;
 mod server;
 mod client;
+mod reng;
 
 fn main() {
 	let args : Vec<String> = env::args().collect();
@@ -19,6 +20,8 @@ fn main() {
 				println!("Invalid argument, exiting process.");
 			},
 		}
+	} else {
+		client::client();
 	}
 
 }

@@ -8,12 +8,13 @@
 			"name": "(Windows) Launch",
 			"type": "cppvsdbg",
 			"request": "launch",
-			"program": "enter program name, for example ${workspaceFolder}/a.exe",
+            "program": "${workspaceFolder}/target/debug/${workspaceFolderBasename}",
 			"args": [],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
 			"environment": [],
-			"externalConsole": false
+			"externalConsole": false,
+			"preLaunchTask": "Rust: cargo build - surv"
 		}
 	]
 }
