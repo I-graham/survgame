@@ -11,9 +11,11 @@ fn main() -> std::io::Result<()> {
 
 	options.set_optimization_level(shaderc::OptimizationLevel::Performance);
 
-	options.set_include_callback(|source_req, _, _, _| {
+	options.set_include_callback(|source_req, _, path, _| {
 
-		let full_req = format!("assets/shaders/{}", source_req);
+		let path = std::path::Path::new(path);
+
+		let full_req = format!("{}/{}", path.parent().unwrap_or(std::path::Path::new(".")).display(), source_req);
 
 		let mut content = String::new();
 
@@ -26,7 +28,7 @@ fn main() -> std::io::Result<()> {
 
 	});
 
-	for maybe_file in std::fs::read_dir("assets/shaders").unwrap() {
+	for maybe_file in std::fs::read_dir("assets/shaders").unwrap().into_iter().chain(std::fs::read_dir("src/reng/shaders").unwrap().into_iter()) {
 
 		let file = maybe_file.unwrap();
 

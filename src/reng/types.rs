@@ -1,21 +1,42 @@
-/*use paste::paste;
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug)]
+pub struct GLint(pub i32);
 
-macro_rules! uniform_field {
-	($field:ident : $type:ty) => { paste! {
-		$field : $type,
-		[<__ $field>] : [i8; 16 - std::mem::size_of::<$type>()],
-	} };
-}*/
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug)]
+pub struct GLfloat(pub f32);
 
-#[repr(C)]
-pub struct Uniform {
-	pub number : f32,
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Debug)]
+pub struct GLvec2(pub f32, pub f32);
+
+#[repr(C, align(16))]
+#[derive(Clone, Copy, Debug)]
+pub struct GLvec3(pub f32, pub f32, pub f32);
+
+#[repr(C, align(16))]
+#[derive(Clone, Copy, Debug)]
+pub struct GLvec4(pub f32, pub f32, pub f32, pub f32);
+
+#[repr(C, align(16))]
+pub struct Instance2D {
+	pub color_tint     : GLvec4,
+	pub texture_coords : GLvec4,
+	pub scale          : GLvec2,
+	pub translate      : GLvec2,
 }
 
-#[repr(C)]
-pub struct Instance2D {
-	pub texture_id : i32,
-	pub color_tint : [f32; 4],
-	pub scale      : f32,
-	pub translate  : [f32; 2],
+use futures::executor::{LocalPool, LocalSpawner};
+pub struct RenderData {
+	pub uniform_buffer  : wgpu::Buffer,
+	pub uniform_bg      : wgpu::BindGroup,
+	pub instance_buffer : wgpu::Buffer,
+	pub instance_bg     : wgpu::BindGroup,
+	pub instance_len    : usize,
+	pub instance_cap    : usize,
+	pub encoder         : Option<wgpu::CommandEncoder>,
+	pub staging_belt    : wgpu::util::StagingBelt,
+	pub spawner         : (LocalPool, LocalSpawner),
+	pub texture_bg      : wgpu::BindGroup,
+	pub nearest_sampler : wgpu::Sampler,
 }

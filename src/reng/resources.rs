@@ -1,9 +1,8 @@
-use crate::utils;
+use super::utils;
 
-pub struct RenderResources2D {
+pub struct RenderResources2D<UniformType> {
 	pub win_size     : winit::dpi::PhysicalSize<u32>,
 	pub sample_count : u32,
-
 	pub surface      : wgpu::Surface,
 	pub adapter      : wgpu::Adapter,
 	pub device       : wgpu::Device,
@@ -11,20 +10,25 @@ pub struct RenderResources2D {
 	pub sc_desc      : wgpu::SwapChainDescriptor,
 	pub swap         : wgpu::SwapChain,
 	pub pipeline     : wgpu::RenderPipeline,
-	pub uniform_bg   : wgpu::BindGroup,
 	pub uniform_bgl  : wgpu::BindGroupLayout,
-	pub uniform_buf  : wgpu::Buffer,
 	pub instance_bgl : wgpu::BindGroupLayout,
-
+	pub texture_bgl  : wgpu::BindGroupLayout,
 	pub depth_buffer : (wgpu::Texture, wgpu::TextureView),
 	pub msaa_texture : (wgpu::Texture, wgpu::TextureView),
+	_marker      : std::marker::PhantomData<UniformType>,
 
 }
 
-impl RenderResources2D {
+impl<UniformType> RenderResources2D<UniformType> {
 	const DEPTH_FORMAT : wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-	pub async fn new<T>(win : &winit::window::Window, vertex_desc : wgpu::VertexBufferDescriptor<'_>, vertex_uniform : T, sample_count : u32) -> Self{
+	const VERTEX_DESC : wgpu::VertexBufferDescriptor<'static> = wgpu::VertexBufferDescriptor {
+		stride : 8,
+		step_mode : wgpu::InputStepMode::Vertex,
+		attributes : &wgpu::vertex_attr_array![0 => Float2],
+	};
+
+	pub async fn new(win : &winit::window::Window, sample_count : u32, vert_shader_path : Option<&std::path::Path>, frag_shader_path : Option<&std::path::Path>) -> Self{
 
 		let win_size = win.inner_size();
 
@@ -40,8 +44,6 @@ impl RenderResources2D {
 		).await.unwrap();
 
 		let adapter_features = adapter.features();
-
-		let mut a = adapter_features;
 
 		let (device, queue) = adapter.request_device(
 			&wgpu::DeviceDescriptor {
@@ -64,37 +66,17 @@ impl RenderResources2D {
 
 		let swap = device.create_swap_chain(&surface, &sc_desc);
 
-		use wgpu::util::{BufferInitDescriptor, DeviceExt};
-		let uniform_buf = device.create_buffer_init(
-			&BufferInitDescriptor {
-				label : None,
-				contents : utils::to_char_slice(&[vertex_uniform]),
-				usage : wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-			}
-		);
-
-		let uniforms_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+		let uniform_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
 			label: Some("uniform_layout"),
 			entries: &[
 				wgpu::BindGroupLayoutEntry {
 					binding : 0,
+					count : None,
 					visibility : wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
 					ty: wgpu::BindingType::UniformBuffer {
 						dynamic : false,
-						min_binding_size : Some(core::num::NonZeroU64::new(std::mem::size_of::<T>() as u64).unwrap()),
+						min_binding_size : Some(std::num::NonZeroU64::new(std::mem::size_of::<UniformType>() as u64).unwrap()),
 					},
-					count : None,
-				},
-			],
-		});
-
-		let uniform_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
-			layout: &uniforms_layout,
-			label: Some("uniform_bg"),
-			entries : &[
-				wgpu::BindGroupEntry {
-					binding : 0,
-					resource : wgpu::BindingResource::Buffer(uniform_buf.slice(..))
 				},
 			],
 		});
@@ -115,16 +97,59 @@ impl RenderResources2D {
 			label : Some("instances")
 		});
 
+		let texture_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+			entries : &[
+				wgpu::BindGroupLayoutEntry {
+					binding : 0,
+					count : None,
+					visibility : wgpu::ShaderStage::FRAGMENT,
+					ty : wgpu::BindingType::SampledTexture {
+						multisampled : false,
+						dimension : wgpu::TextureViewDimension::D2,
+						component_type : wgpu::TextureComponentType::Uint,
+					}
+				},
+				wgpu::BindGroupLayoutEntry {
+					binding : 1,
+					count : None,
+					visibility : wgpu::ShaderStage::FRAGMENT,
+					ty : wgpu::BindingType::Sampler {
+						comparison : false,
+					}
+				}
+			],
+			label : None,
+		});
+
 		let depth_buffer = utils::create_depth_texture(&device, &sc_desc, sample_count, Self::DEPTH_FORMAT);
 
 		let pipeline = {
 
-			let vertshader = device.create_shader_module(wgpu::include_spirv!("../../assets/shaders/default.vert.spv"));
-			let fragshader = device.create_shader_module(wgpu::include_spirv!("../../assets/shaders/default.frag.spv"));
+			let vert_shader;
+			let frag_shader;
+
+			if let Some(path) = vert_shader_path {
+				let full = path.canonicalize().unwrap_or_else(|err| panic!("unable to canonicalize path due to the following error : '{}'", err));
+				let source = std::fs::read(full.clone()).unwrap_or_else(|err| panic!("Unable to load fragment source from '{}' due to the following error : '{}'.", full.clone().display(), err));
+				let module = wgpu::util::make_spirv(source.as_slice());
+				vert_shader = device.create_shader_module(module);
+			} else {
+				vert_shader = device.create_shader_module(wgpu::include_spirv!("./shaders/default.vert.spv"));
+			};
+
+			if let Some(path) = frag_shader_path {
+				let full = path.canonicalize().unwrap_or_else(|err| panic!("unable to canonicalize path due to the following error : '{}'", err));
+				let source = std::fs::read(full.clone()).unwrap_or_else(|err| panic!("Unable to load fragment source from '{}' due to the following error : '{}'.", full.clone().display(), err));
+				let module = wgpu::util::make_spirv(source.as_slice());
+				frag_shader = device.create_shader_module(module);
+			} else {
+				frag_shader = device.create_shader_module(wgpu::include_spirv!("./shaders/default.frag.spv"));
+			};
+
 
 			let layout = &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
 				label : None,
-				bind_group_layouts: &[&uniforms_layout, &instance_bgl],
+				bind_group_layouts: &[&uniform_bgl, &instance_bgl, &texture_bgl],
 				push_constant_ranges: &[],
 			});
 
@@ -133,11 +158,11 @@ impl RenderResources2D {
 					label : None,
 					layout : Some(layout),
 					vertex_stage: wgpu::ProgrammableStageDescriptor {
-						module : &vertshader,
+						module : &vert_shader,
 						entry_point: "main",
 					},
 					fragment_stage: Some (wgpu::ProgrammableStageDescriptor {
-						module: &fragshader,
+						module: &frag_shader,
 						entry_point: "main",
 					}),
 					rasterization_state: Some(wgpu::RasterizationStateDescriptor{
@@ -164,7 +189,7 @@ impl RenderResources2D {
 							write_mask : wgpu::ColorWrite::ALL,
 						}
 					],
-					primitive_topology : wgpu::PrimitiveTopology::TriangleList,
+					primitive_topology : wgpu::PrimitiveTopology::TriangleStrip,
 					depth_stencil_state : Some( wgpu::DepthStencilStateDescriptor {
 						format : Self::DEPTH_FORMAT,
 						depth_write_enabled : true,
@@ -178,7 +203,7 @@ impl RenderResources2D {
 					}),
 					vertex_state : wgpu::VertexStateDescriptor {
 						index_format: wgpu::IndexFormat::Uint32,
-						vertex_buffers: &[vertex_desc],
+						vertex_buffers: &[Self::VERTEX_DESC],
 					},
 					sample_count,
 					sample_mask: !0,
@@ -190,6 +215,7 @@ impl RenderResources2D {
 		};
 
 		let msaa_texture = utils::create_multisampled_framebuffer(&device, &sc_desc, sample_count);
+		let _marker = std::marker::PhantomData::<UniformType>;
 
 		Self {
 			win_size,
@@ -201,13 +227,51 @@ impl RenderResources2D {
 			sc_desc,
 			swap,
 			pipeline,
-			uniform_bg,
-			uniform_bgl : uniforms_layout,
-			uniform_buf,
+			uniform_bgl,
 			depth_buffer,
 			instance_bgl,
-			msaa_texture
+			texture_bgl,
+			msaa_texture,
+			_marker,
 		}
+
+	}
+
+	pub fn create_texture_from_image(&self, image : &image::RgbaImage) -> wgpu::Texture {
+		let dimensions = image.dimensions();
+
+		let size = wgpu::Extent3d {
+			width : dimensions.0,
+			height : dimensions.1,
+			depth : 1,
+		};
+
+		let text = self.device.create_texture(&wgpu::TextureDescriptor {
+			label : Some("reng_texture"),
+			usage : wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+			mip_level_count : 1,
+			sample_count : 1,
+			format : wgpu::TextureFormat::Rgba8UnormSrgb,
+			dimension : wgpu::TextureDimension::D2,
+			size,
+		});
+
+		self.queue.write_texture(
+			wgpu::TextureCopyView {
+				texture : &text,
+				mip_level : 0,
+				origin : wgpu::Origin3d::ZERO,
+			},
+			image.as_raw().as_slice(),
+			wgpu::TextureDataLayout {
+				offset : 0,
+				bytes_per_row : 4 * dimensions.0,
+				rows_per_image : dimensions.1,
+			},
+			size
+		);
+
+		text
 
 	}
 

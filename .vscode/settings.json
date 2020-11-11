@@ -1,9 +1,11 @@
 {
   "files.exclude": {
-    "target": true,
     ".gitignore": true,
     "Cargo.lock": true,
     ".vs": true,
-    ".vscode": true
+    ".vscode": true,
+    "src\\reng\\shaders\\default.frag.spv": true,
+    "src\\reng\\shaders\\default.vert.spv": true,
+    "target": true
   }
 }

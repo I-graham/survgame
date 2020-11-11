@@ -9,7 +9,7 @@ pub fn server() {
 
 	let socket_addr = net::SocketAddr::new(server_ip, utils::SERVER_PORT);
 
-	let listener = net::TcpListener::bind(socket_addr).expect(&format!("unable to listen on {}", socket_addr));
+	let listener = net::TcpListener::bind(socket_addr).unwrap_or_else(|_| panic!("unable to listen on {}", socket_addr));
 
 	let public_ip = utils::get_public_ip();
 
