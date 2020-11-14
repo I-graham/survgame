@@ -1,6 +1,6 @@
 use super::utils;
 
-pub struct RenderResources2D<UniformType> {
+pub struct RenderResources2D<UniformType, InstanceType> {
 	pub win_size     : winit::dpi::PhysicalSize<u32>,
 	pub sample_count : u32,
 	pub surface      : wgpu::Surface,
@@ -15,11 +15,12 @@ pub struct RenderResources2D<UniformType> {
 	pub texture_bgl  : wgpu::BindGroupLayout,
 	pub depth_buffer : (wgpu::Texture, wgpu::TextureView),
 	pub msaa_texture : (wgpu::Texture, wgpu::TextureView),
-	_marker      : std::marker::PhantomData<UniformType>,
+	_unif_marker     : std::marker::PhantomData<UniformType>,
+	_inst_marker     : std::marker::PhantomData<InstanceType>,
 
 }
 
-impl<UniformType> RenderResources2D<UniformType> {
+impl<UniformType, InstanceType> RenderResources2D<UniformType, InstanceType> {
 	const DEPTH_FORMAT : wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
 	const VERTEX_DESC : wgpu::VertexBufferDescriptor<'static> = wgpu::VertexBufferDescriptor {
@@ -215,7 +216,8 @@ impl<UniformType> RenderResources2D<UniformType> {
 		};
 
 		let msaa_texture = utils::create_multisampled_framebuffer(&device, &sc_desc, sample_count);
-		let _marker = std::marker::PhantomData::<UniformType>;
+		let _unif_marker = std::marker::PhantomData::<UniformType>;
+		let _inst_marker = std::marker::PhantomData::<InstanceType>;
 
 		Self {
 			win_size,
@@ -232,7 +234,8 @@ impl<UniformType> RenderResources2D<UniformType> {
 			instance_bgl,
 			texture_bgl,
 			msaa_texture,
-			_marker,
+			_unif_marker,
+			_inst_marker,
 		}
 
 	}

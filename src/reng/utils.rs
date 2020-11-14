@@ -87,8 +87,10 @@ pub fn create_spritesheet(mut images : Vec<image::RgbaImage>) -> (image::RgbaIma
 
 	let mut corners = vec![(0u32, 0u32)];
 	let mut placed_images : Vec<((u32,u32),(u32,u32))> = vec![];
+	let mut final_coords = vec![];
 
-	images.sort_by_key(|e| e.height() * e.width() );
+	images.sort_by_key(|e| -((e.height() * e.width()) as i32) );
+
 	for image in &images {
 		let mut best_extension : Option<(usize, (u32, u32), bool)> = None;
 		'corner_loop: for corner in corners.iter().enumerate() {
@@ -121,9 +123,9 @@ pub fn create_spritesheet(mut images : Vec<image::RgbaImage>) -> (image::RgbaIma
 				);
 
 				if let Some(best_ext) = best_extension {
-					let dims = image.dimensions();
+					let dims = dyn_image.dimensions();
 					let compute_ext_size = |ext : (u32, u32)| {
-						ext.0 * dims.1 + ext.1 * dims.0 - ext.0 * ext.1
+						ext.0 * dims.1 + ext.1 * dims.0 + ext.0 * ext.1
 					};
 					if compute_ext_size(best_ext.1) > compute_ext_size(extension) {
 						best_extension = Some((corner.0, extension, *rotated));
@@ -155,13 +157,21 @@ pub fn create_spritesheet(mut images : Vec<image::RgbaImage>) -> (image::RgbaIma
 			dims = (
 				corner.0 + flipped.dimensions().0,
 				corner.1 + flipped.dimensions().1
-			)
+			);
+			final_coords.push((
+				(dims.0, corner.1),
+				(corner.0, dims.1)
+			));
 		} else {
 			dyn_image.copy_from(image, corner.0, corner.1).unwrap();
 			dims = (
 				corner.0 + image.dimensions().0,
 				corner.1 + image.dimensions().1
-			)
+			);
+			final_coords.push((
+				corner,
+				dims
+			));
 		}
 
 		placed_images.push((
@@ -180,6 +190,6 @@ pub fn create_spritesheet(mut images : Vec<image::RgbaImage>) -> (image::RgbaIma
 	}
 
 
-	(dyn_image.into_rgba(), placed_images)
+	(dyn_image.into_rgba(), final_coords)
 
 }

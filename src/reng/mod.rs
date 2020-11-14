@@ -2,17 +2,19 @@ pub mod types;
 pub mod utils;
 mod resources;
 
-pub struct Renderer2D<UniformType : Copy> {
-	resources   : resources::RenderResources2D<UniformType>,
+pub struct Renderer2D<UniformType : Copy, InstanceType> {
+	resources   : resources::RenderResources2D<UniformType, InstanceType>,
 	render_data : types::RenderData,
 }
 
-impl<UniformType : Copy> Renderer2D<UniformType> {
+impl<UniformType : Copy, InstanceType> Renderer2D<UniformType, InstanceType> {
+
+	const PREALLOCATED_INSTANCES : usize = 16;
 
 	pub fn new(win : &winit::window::Window, sample_count : u32, vs_path : Option<&std::path::Path>, fs_path : Option<&std::path::Path>) -> Self {
 
 		let resources = futures::executor::block_on(
-			resources::RenderResources2D::<UniformType>::new(win, sample_count, vs_path, fs_path)
+			resources::RenderResources2D::<UniformType, InstanceType>::new(win, sample_count, vs_path, fs_path)
 		);
 
 		let uniform_buffer = resources.device.create_buffer(
@@ -37,12 +39,10 @@ impl<UniformType : Copy> Renderer2D<UniformType> {
 			}
 		);
 
-		const PREALLOCATED_INSTANCES : usize = 16;
-
 		let instance_buffer = resources.device.create_buffer(
 			&wgpu::BufferDescriptor {
 				label : None,
-				size  : (PREALLOCATED_INSTANCES * std::mem::size_of::<types::Instance2D>()) as wgpu::BufferAddress,
+				size  : (Self::PREALLOCATED_INSTANCES * std::mem::size_of::<InstanceType>()) as wgpu::BufferAddress,
 				usage : wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST,
 				mapped_at_creation : false,
 			}
@@ -61,15 +61,15 @@ impl<UniformType : Copy> Renderer2D<UniformType> {
 			}
 		);
 
-		let def_image = image::ImageBuffer::from_pixel(1, 1, image::Rgba([0,255,0,255]));
+		let def_image = image::ImageBuffer::from_pixel(1, 1, image::Rgba([255,255,255,255]));
 
 		let texture = resources.create_texture_from_image(&def_image);
 
 		let sampler = resources.device.create_sampler(&wgpu::SamplerDescriptor {
 			label : Some("nearest sampler"),
-			address_mode_u: wgpu::AddressMode::ClampToEdge,
-			address_mode_v: wgpu::AddressMode::ClampToEdge,
-			address_mode_w: wgpu::AddressMode::ClampToEdge,
+			address_mode_u: wgpu::AddressMode::MirrorRepeat,
+			address_mode_v: wgpu::AddressMode::MirrorRepeat,
+			address_mode_w: wgpu::AddressMode::MirrorRepeat,
 			mag_filter: wgpu::FilterMode::Nearest,
 			min_filter: wgpu::FilterMode::Linear,
 			mipmap_filter: wgpu::FilterMode::Nearest,
@@ -103,7 +103,7 @@ impl<UniformType : Copy> Renderer2D<UniformType> {
 			instance_buffer,
 			instance_bg,
 			instance_len : 0,
-			instance_cap : PREALLOCATED_INSTANCES,
+			instance_cap : Self::PREALLOCATED_INSTANCES,
 			encoder : None,
 			staging_belt : wgpu::util::StagingBelt::new(0x100),
 			spawner,
@@ -127,7 +127,7 @@ impl<UniformType : Copy> Renderer2D<UniformType> {
 		self.set_encoder(encoder);
 	}
 
-	pub fn set_instances(&mut self, instances : &[types::Instance2D]) {
+	pub fn set_instances(&mut self, instances : &[InstanceType]) {
 		let mut encoder = self.get_encoder();
 
 		if self.render_data.instance_cap < instances.len() {
@@ -135,7 +135,7 @@ impl<UniformType : Copy> Renderer2D<UniformType> {
 			self.render_data.instance_buffer = self.resources.device.create_buffer(
 				&wgpu::BufferDescriptor {
 					label : None,
-					size  : (instances.len() * std::mem::size_of::<types::Instance2D>()) as wgpu::BufferAddress,
+					size  : (instances.len() * std::mem::size_of::<InstanceType>()) as wgpu::BufferAddress,
 					usage : wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST,
 					mapped_at_creation : false,
 				}
@@ -193,7 +193,7 @@ impl<UniformType : Copy> Renderer2D<UniformType> {
 		self.resources.resize(dims)
 	}
 
-	pub fn draw_test(&mut self, uniform : &UniformType, instances : &[types::Instance2D]) {
+	pub fn draw_test(&mut self, uniform : &UniformType, instances : &[InstanceType]) {
 		self.set_uniform(uniform);
 		self.set_instances(instances);
 
@@ -213,7 +213,7 @@ impl<UniformType : Copy> Renderer2D<UniformType> {
 				attachment : &frame.view,
 				resolve_target : None,
 				ops : wgpu::Operations {
-					load  : wgpu::LoadOp::Clear(wgpu::Color::BLUE),
+					load  : wgpu::LoadOp::Clear(wgpu::Color{r : 0.0, g : 0.0, b : 0.0, a : 0.0}),
 					store : true,
 				}
 			}
@@ -222,7 +222,7 @@ impl<UniformType : Copy> Renderer2D<UniformType> {
 				attachment : &self.resources.msaa_texture.1,
 				resolve_target : Some(&frame.view),
 				ops : wgpu::Operations {
-					load  : wgpu::LoadOp::Clear(wgpu::Color::BLUE),
+					load  : wgpu::LoadOp::Clear(wgpu::Color{r : 0.0, g : 0.0, b : 0.0, a : 0.0}),
 					store : true,
 				}
 			}

@@ -18,14 +18,6 @@ pub struct GLvec3(pub f32, pub f32, pub f32);
 #[derive(Clone, Copy, Debug)]
 pub struct GLvec4(pub f32, pub f32, pub f32, pub f32);
 
-#[repr(C, align(16))]
-pub struct Instance2D {
-	pub color_tint     : GLvec4,
-	pub texture_coords : GLvec4,
-	pub scale          : GLvec2,
-	pub translate      : GLvec2,
-}
-
 use futures::executor::{LocalPool, LocalSpawner};
 pub struct RenderData {
 	pub uniform_buffer  : wgpu::Buffer,
