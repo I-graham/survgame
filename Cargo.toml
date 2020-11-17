@@ -23,6 +23,7 @@ serde_derive = "1.0"
 
 [features]
 shaderc-build-from-source = ["shaderc/build-from-source"]
+compile-shaders = ["shaderc"]
 
 [build-dependencies]
-shaderc= "0.6" #requires git, python, ninja (on windows), & a c++11 compiler to be in path variable
+shaderc= { version="0.6", optional=true } #requires git, python, ninja (on windows), & a c++11 compiler to be in path variable
