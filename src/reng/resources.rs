@@ -39,7 +39,7 @@ impl<UniformType, InstanceType> RenderResources2D<UniformType, InstanceType> {
 
 		let adapter = instance.request_adapter(
 			&wgpu::RequestAdapterOptions {
-				power_preference : wgpu::PowerPreference::Default,
+				power_preference : wgpu::PowerPreference::LowPower,
 				compatible_surface : Some(&surface),
 			}
 		).await.unwrap();
@@ -194,7 +194,7 @@ impl<UniformType, InstanceType> RenderResources2D<UniformType, InstanceType> {
 					depth_stencil_state : Some( wgpu::DepthStencilStateDescriptor {
 						format : Self::DEPTH_FORMAT,
 						depth_write_enabled : true,
-						depth_compare : wgpu::CompareFunction::Less,
+						depth_compare : wgpu::CompareFunction::LessEqual,
 						stencil : wgpu::StencilStateDescriptor {
 							front : wgpu::StencilStateFaceDescriptor::IGNORE,
 							back : wgpu::StencilStateFaceDescriptor::IGNORE,

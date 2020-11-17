@@ -128,39 +128,41 @@ impl<UniformType : Copy, InstanceType> Renderer2D<UniformType, InstanceType> {
 	}
 
 	pub fn set_instances(&mut self, instances : &[InstanceType]) {
-		let mut encoder = self.get_encoder();
+		if instances.len() > 0 {
+			let mut encoder = self.get_encoder();
 
-		if self.render_data.instance_cap < instances.len() {
-			self.render_data.instance_cap = instances.len();
-			self.render_data.instance_buffer = self.resources.device.create_buffer(
-				&wgpu::BufferDescriptor {
-					label : None,
-					size  : (instances.len() * std::mem::size_of::<InstanceType>()) as wgpu::BufferAddress,
-					usage : wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST,
-					mapped_at_creation : false,
-				}
-			);
+			if self.render_data.instance_cap < instances.len() {
+				self.render_data.instance_cap = instances.len();
+				self.render_data.instance_buffer = self.resources.device.create_buffer(
+					&wgpu::BufferDescriptor {
+						label : None,
+						size  : (instances.len() * std::mem::size_of::<InstanceType>()) as wgpu::BufferAddress,
+						usage : wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST,
+						mapped_at_creation : false,
+					}
+				);
 
-			self.render_data.instance_bg = self.resources.device.create_bind_group(
-				&wgpu::BindGroupDescriptor {
-					label : None,
-					layout : &self.resources.instance_bgl,
-					entries : &[
-						wgpu::BindGroupEntry {
-							binding : 0,
-							resource : wgpu::BindingResource::Buffer(self.render_data.instance_buffer.slice(..))
-						}
-					]
-				}
-			);
+				self.render_data.instance_bg = self.resources.device.create_bind_group(
+					&wgpu::BindGroupDescriptor {
+						label : None,
+						layout : &self.resources.instance_bgl,
+						entries : &[
+							wgpu::BindGroupEntry {
+								binding : 0,
+								resource : wgpu::BindingResource::Buffer(self.render_data.instance_buffer.slice(..))
+							}
+						]
+					}
+				);
+			}
+
+			self.render_data.instance_len = instances.len();
+
+			let belt = &mut self.render_data.staging_belt;
+			let inst_slice = utils::to_char_slice(instances);
+			belt.write_buffer(&mut encoder, &self.render_data.instance_buffer, 0 as wgpu::BufferAddress, std::num::NonZeroU64::new(inst_slice.len() as u64).unwrap(), &self.resources.device).copy_from_slice(inst_slice);
+			self.set_encoder(encoder);
 		}
-
-		self.render_data.instance_len = instances.len();
-
-		let belt = &mut self.render_data.staging_belt;
-		let inst_slice = utils::to_char_slice(instances);
-		belt.write_buffer(&mut encoder, &self.render_data.instance_buffer, 0 as wgpu::BufferAddress, std::num::NonZeroU64::new(inst_slice.len() as u64).unwrap(), &self.resources.device).copy_from_slice(inst_slice);
-		self.set_encoder(encoder);
 	}
 
 	pub fn set_texture(&mut self, texture : &wgpu::Texture) {

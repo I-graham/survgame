@@ -20,7 +20,6 @@ pub fn to_char_slice<T>(array : &[T]) -> &[u8] {
 
 }
 
-
 pub fn create_depth_texture(device : &wgpu::Device, sc_desc : &wgpu::SwapChainDescriptor, sample_count: u32, depth_format : wgpu::TextureFormat) -> (wgpu::Texture, wgpu::TextureView) {
 
 	let size = wgpu::Extent3d {

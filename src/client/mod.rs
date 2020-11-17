@@ -1,12 +1,24 @@
-mod types;
-mod state;
+pub mod types;
+pub mod state;
 
-use crate::reng;
+use super::utils;
+use std::net;
 
-pub fn client() {
+pub fn client(address : &str) {
+	use std::str::FromStr;
+
+	let server_addr;
+	if let Ok(addr) = net::SocketAddr::from_str(address) {
+		server_addr = addr;
+	} else if let Ok(addr) = net::IpAddr::from_str(address) {
+		server_addr = net::SocketAddr::new(addr, utils::SERVER_PORT);
+	} else {
+		server_addr = net::SocketAddr::new("127.0.0.1".parse().unwrap(), utils::SERVER_PORT);
+	}
+
 
 	let event_loop = winit::event_loop::EventLoop::new();
-	let mut game_state = state::ClientGame::new(&event_loop, None, None);
+	let mut game_state = state::ClientGame::new(server_addr, None, None, &event_loop);
 
 	event_loop.run(move |event, _, control_flow| {
 

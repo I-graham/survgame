@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use super::reng;
+use crate::reng::types::*;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -10,11 +9,25 @@ pub struct Uniform {
 #[repr(C, align(16))]
 #[derive(Clone, Debug)]
 pub struct Instance2D {
-	pub color_tint     : reng::types::GLvec4,
-	pub texture_coords : reng::types::GLvec4,
-	pub scale          : reng::types::GLvec2,
-	pub translate      : reng::types::GLvec2,
-	pub rotation       : reng::types::GLfloat,
+	pub color_tint     : GLvec4,
+	pub texture_coords : GLvec4,
+	pub scale          : GLvec2,
+	pub translate      : GLvec2,
+	pub rotation       : GLfloat,
+	pub z_coord        : GLfloat,
+}
+
+impl Default for Instance2D {
+	fn default() -> Self {
+		Instance2D {
+			color_tint : GLvec4(1.0,1.0,1.0,1.0),
+			texture_coords : GLvec4(0.0,0.0,1.0,1.0),
+			scale : GLvec2(1.0,1.0),
+			translate : GLvec2(0.0,0.0),
+			rotation : GLfloat(0.0),
+			z_coord : GLfloat(0.0),
+		}
+	}
 }
 
 const START_WIN_SIZE : winit::dpi::PhysicalSize<f32> = winit::dpi::PhysicalSize {
@@ -28,7 +41,7 @@ pub struct WinState {
 	pub aspect       : f32,
 	pub mouse_pos    : (f32, f32),
 	pub mouse_down_l : bool,
-	pub keymap       : std::collections::HashMap<winit::event::VirtualKeyCode, bool>,
+	pub keymap       : fnv::FnvHashMap<winit::event::VirtualKeyCode, bool>,
 }
 
 impl WinState {
@@ -48,7 +61,7 @@ impl WinState {
 			aspect,
 			mouse_pos    : (0.0,0.0),
 			mouse_down_l : false,
-			keymap       : HashMap::new(),
+			keymap       : fnv::FnvHashMap::default(),
 		}
 
 	}

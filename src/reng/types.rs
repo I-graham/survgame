@@ -1,21 +1,21 @@
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GLint(pub i32);
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GLfloat(pub f32);
 
 #[repr(C, align(8))]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GLvec2(pub f32, pub f32);
 
 #[repr(C, align(16))]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GLvec3(pub f32, pub f32, pub f32);
 
 #[repr(C, align(16))]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct GLvec4(pub f32, pub f32, pub f32, pub f32);
 
 use futures::executor::{LocalPool, LocalSpawner};

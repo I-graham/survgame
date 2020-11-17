@@ -1,7 +1,14 @@
-use super::reng;
 use super::types;
-use fnv::FnvHashMap;
+use crate::reng;
+use crate::reng::types::*;
+use crate::utils;
+use crate::world::World;
+use crate::comms::{Action, Perception};
+
+use std::net;
+use winit::event::VirtualKeyCode;
 use std::hash::Hash;
+use fnv::FnvHashMap;
 use strum::IntoEnumIterator;
 use strum_macros::{IntoStaticStr, EnumIter};
 
@@ -44,7 +51,7 @@ impl ClientTexture {
 			let coord_ul = pixel_to_text_coord(pos.0);
 			let coord_lr = pixel_to_text_coord(pos.1);
 
-			let coords = reng::types::GLvec4(
+			let coords = GLvec4(
 				coord_ul.0,
 				coord_ul.1,
 				coord_lr.0,
@@ -62,22 +69,24 @@ impl ClientTexture {
 pub struct ClientGame {
 	pub renderer       : reng::Renderer2D<types::Uniform, types::Instance2D>,
 	pub win_state      : types::WinState,
-	pub timestep       : std::time::Instant,
+	pub timestep       : utils::Timer,
 	pub uniform        : types::Uniform,
 	pub instance_queue : Vec<types::Instance2D>,
-	pub texture_map    : FnvHashMap<ClientTexture, reng::types::GLvec4>,
+	pub texture_map    : FnvHashMap<ClientTexture, GLvec4>,
+	pub world          : World,
+	pub stream         : net::TcpStream,
+	pub id             : usize
 }
 
 impl ClientGame {
-	pub fn new(event_loop: &winit::event_loop::EventLoopWindowTarget<()>, vs_path : Option<&std::path::Path>, fs_path : Option<&std::path::Path>) -> Self {
+	pub fn new(address : net::SocketAddr, vs_path : Option<&std::path::Path>, fs_path : Option<&std::path::Path>, event_loop: &winit::event_loop::EventLoopWindowTarget<()>,) -> Self {
 
 		let win_state = types::WinState::new(event_loop);
-		let timestep  = std::time::Instant::now();
 		let mut renderer  = reng::Renderer2D::<types::Uniform, types::Instance2D>::new(&win_state.window, 1, vs_path, fs_path);
 
 		let aspect = win_state.size.width as f32 / win_state.size.height as f32;
 		let uniform = types::Uniform {
-			ortho : cgmath::ortho(-aspect, aspect, -1., 1., -1., 1.),
+			ortho : cgmath::ortho(-aspect, aspect, -1., 1., -100., 100.),
 		};
 
 		let (spritesheet, texture_map) = ClientTexture::load_textures();
@@ -87,6 +96,19 @@ impl ClientGame {
 
 		let instance_queue = vec![];
 
+		let stream = net::TcpStream::connect(address).unwrap_or_else(
+			|err| panic!("unable to connect to server at {:?}, due to the following error : {:?}", address, err)
+		);
+
+		let id;
+		if let Perception::ID(player_id) = bincode::deserialize_from(&stream).expect("Unable to get data from server") {
+			id = player_id as usize;
+		} else {
+			panic!("Unable to get ID from server.")
+		}
+		stream.set_nonblocking(true).expect("Unable to set nonblocking on TcpStream, that's odd...");
+
+		let timestep  = utils::Timer::new();
 		ClientGame {
 			win_state,
 			renderer,
@@ -94,32 +116,15 @@ impl ClientGame {
 			uniform,
 			texture_map,
 			instance_queue,
+			stream,
+			world : World::new(),
+			id,
 		}
 	}
 
 	pub fn draw(&mut self) {
 
-		let scale = reng::types::GLvec2(
-			1.,
-			1.,
-		);
-
-		let translate = reng::types::GLvec2(
-			self.win_state.mouse_pos.0 * self.win_state.aspect,
-			self.win_state.mouse_pos.1
-		);
-
-		let rotation = reng::types::GLfloat(0.0);
-
-		let instance = types::Instance2D {
-			color_tint     : reng::types::GLvec4(1.0,1.0,1.0,1.0),
-			texture_coords : self.texture_map[&ClientTexture::Ship],
-			scale,
-			translate,
-			rotation,
-		};
-
-		self.instance_queue.push(instance);
+		self.world.render_to(&mut self.instance_queue, &self.texture_map);
 
 		let instances = self.instance_queue.as_slice();
 		self.renderer.draw_test(&self.uniform, instances);
@@ -133,9 +138,32 @@ impl ClientGame {
 	}
 
 	pub fn run(&mut self) {
-		let timestep = std::time::Instant::now().duration_since(self.timestep).as_secs_f32();
-		self.timestep = std::time::Instant::now();
+		let timestep = self.timestep.reset();
+
+		if let Some(player_ship) = self.world.ships.get_mut(self.id as usize) {
+			if player_ship.alive {
+				let turn_dir = *self.win_state.keymap.get(&VirtualKeyCode::A).unwrap_or(&false) as i32 - *self.win_state.keymap.get(&VirtualKeyCode::D).unwrap_or(&false) as i32;
+				if turn_dir != 0 {
+					let angle = turn_dir as f32 * 200.0 * timestep;
+					player_ship.angle += angle;
+					self.send(&Action::TurnShip(angle));
+				}
+			}
+		}
+
+		if let Ok(perception) = bincode::deserialize_from(&self.stream) {
+			use Perception::*;
+			match perception {
+				World(world) => self.world = world,
+				_ => (),
+			}
+		}
+		self.world.update(timestep);
 
 
+	}
+
+	fn send(&mut self, action : &Action) {
+		bincode::serialize_into(&self.stream, &action).unwrap_or_else(|e| panic!("Unable to send data to server due to {:?}", e));
 	}
 }
