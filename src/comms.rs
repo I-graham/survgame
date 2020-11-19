@@ -4,10 +4,9 @@ use crate::world;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Action {
-	TurnShip(f32),
 	Disconnect,
-	ID(i32),
 	Message(String),
+	TurnShip(f32),
 }
 
 #[derive(Serialize, Deserialize, Debug)]

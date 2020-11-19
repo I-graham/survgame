@@ -1,4 +1,5 @@
 use std::net;
+use std::time;
 use std::thread;
 use std::sync::mpsc;
 use comms::{Action, Perception};
@@ -95,17 +96,11 @@ impl Server {
 		let timestep = self.timestep.reset();
 		self.world.update(timestep);
 
-		while let Ok(action) = self.receiver.try_recv(){
+		while let Ok(action) = self.receiver.try_recv() {
 			use Action::*;
 			match action.1 {
-				Disconnect =>  self.clients[action.0].disconnect(),
-				Message(msg) => println!("msg : {}", msg),
-				TurnShip(theta) => {
-					let ship = self.world.ships.get_mut(action.0).unwrap();
-					ship.angle += theta;
-					ship.angle %= 360.;
-				},
-				_ => unimplemented!(),
+				Disconnect => self.clients[action.0].disconnect(),
+				_ => self.world.process(action.0, &action.1),
 			}
 		}
 
@@ -113,6 +108,7 @@ impl Server {
 		if self.authorative_ts.secs() > 0.5/10. {
 			self.authorative_ts.reset();
 			for client in &self.clients {
+				self.world.timestamp = time::UNIX_EPOCH.elapsed().unwrap().as_secs_f32();
 				client.authorative_send_to(&Perception::World(self.world.clone()));
 			}
 		}

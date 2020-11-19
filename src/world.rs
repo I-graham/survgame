@@ -1,20 +1,36 @@
+use std::time;
 use serde_derive::*;
+use fnv::FnvHashMap;
 
+use crate::comms;
 use crate::reng::types::*;
 use crate::client::types::Instance2D;
 use crate::client::state::ClientTexture;
 
-use fnv::FnvHashMap;
 
 #[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct World {
+	pub timestamp  : f32,
 	pub ships : Vec<Ship>,
 }
 
 impl World {
 	pub fn new() -> Self {
+		let timestamp = time::UNIX_EPOCH.elapsed().unwrap().as_secs_f32();
 		Self {
+			timestamp,
 			ships : vec![],
+		}
+	}
+
+	pub fn process(&mut self, player_id : usize, action : &comms::Action) {
+		use comms::Action::*;
+		let player_ship = self.ships.get_mut(player_id).unwrap();
+		match action {
+			TurnShip(theta) => {
+				player_ship.angle += theta;
+			},
+			_ => unimplemented!(),
 		}
 	}
 

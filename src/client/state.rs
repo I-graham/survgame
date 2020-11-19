@@ -6,6 +6,7 @@ use crate::world::World;
 use crate::comms::{Action, Perception};
 
 use std::net;
+use std::collections::VecDeque;
 use winit::event::VirtualKeyCode;
 use std::hash::Hash;
 use fnv::FnvHashMap;
@@ -72,10 +73,11 @@ pub struct ClientGame {
 	pub timestep       : utils::Timer,
 	pub uniform        : types::Uniform,
 	pub instance_queue : Vec<types::Instance2D>,
+	pub action_queue   : VecDeque<(f32, Action)>,
 	pub texture_map    : FnvHashMap<ClientTexture, GLvec4>,
 	pub world          : World,
 	pub stream         : net::TcpStream,
-	pub id             : usize
+	pub id             : usize,
 }
 
 impl ClientGame {
@@ -94,6 +96,8 @@ impl ClientGame {
 		let text = renderer.create_texture_from_image(&spritesheet);
 		renderer.set_texture(&text);
 
+		let action_queue = VecDeque::new();
+
 		let instance_queue = vec![];
 
 		let stream = net::TcpStream::connect(address).unwrap_or_else(
@@ -107,6 +111,7 @@ impl ClientGame {
 			panic!("Unable to get ID from server.")
 		}
 		stream.set_nonblocking(true).expect("Unable to set nonblocking on TcpStream, that's odd...");
+		stream.set_nodelay(true).expect("Unable to set nodelay on TcpStream, that's odd...");
 
 		let timestep  = utils::Timer::new();
 		ClientGame {
@@ -116,6 +121,7 @@ impl ClientGame {
 			uniform,
 			texture_map,
 			instance_queue,
+			action_queue,
 			stream,
 			world : World::new(),
 			id,
@@ -138,17 +144,16 @@ impl ClientGame {
 	}
 
 	pub fn run(&mut self) {
-		let timestep = self.timestep.reset();
+		self.generate_actions();
 
-		if let Some(player_ship) = self.world.ships.get_mut(self.id as usize) {
-			if player_ship.alive {
-				let turn_dir = *self.win_state.keymap.get(&VirtualKeyCode::A).unwrap_or(&false) as i32 - *self.win_state.keymap.get(&VirtualKeyCode::D).unwrap_or(&false) as i32;
-				if turn_dir != 0 {
-					let angle = turn_dir as f32 * 200.0 * timestep;
-					player_ship.angle += angle;
-					self.send(&Action::TurnShip(angle));
-				}
+		while let Some(action) = self.action_queue.front_mut() {
+			if action.0 < self.world.timestamp {
+				self.action_queue.pop_front();
 			}
+		}
+
+		for action in &self.action_queue {
+			self.world.process(self.id, &action.1);
 		}
 
 		if let Ok(perception) = bincode::deserialize_from(&self.stream) {
@@ -158,12 +163,24 @@ impl ClientGame {
 				_ => (),
 			}
 		}
-		self.world.update(timestep);
 
-
+		self.world.update(self.timestep.secs());
+		self.timestep.reset();
 	}
 
-	fn send(&mut self, action : &Action) {
+	fn generate_actions(&mut self) {
+		let turn_dir = *self.win_state.keymap.get(&VirtualKeyCode::A).unwrap_or(&false) as i32 - *self.win_state.keymap.get(&VirtualKeyCode::D).unwrap_or(&false) as i32;
+		if turn_dir != 0 {
+			let angle = turn_dir as f32 * 200.0 * self.timestep.secs();
+			let action = Action::TurnShip(angle);
+			self.world.process(self.id, &action);
+			self.send_to_server(&action);
+			let timestamp = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f32();
+			self.action_queue.push_back((timestamp, action));
+		}
+	}
+
+	fn send_to_server(&mut self, action : &Action) {
 		bincode::serialize_into(&self.stream, &action).unwrap_or_else(|e| panic!("Unable to send data to server due to {:?}", e));
 	}
 }
