@@ -86,7 +86,7 @@ impl ClientGame {
 	pub fn new(address : net::SocketAddr, vs_path : Option<&std::path::Path>, fs_path : Option<&std::path::Path>, event_loop: &winit::event_loop::EventLoopWindowTarget<()>,) -> Self {
 
 		let win_state = types::WinState::new(event_loop);
-		let mut renderer  = reng::Renderer2D::<types::Uniform, types::Instance2D>::new(&win_state.window, 1, vs_path, fs_path);
+		let mut renderer  = reng::Renderer2D::<types::Uniform, types::Instance2D>::new(&win_state.window, 2, vs_path, fs_path);
 
 		let aspect = win_state.size.width as f32 / win_state.size.height as f32;
 		let uniform = types::Uniform {
@@ -173,6 +173,7 @@ impl ClientGame {
 			}
 		}
 
+		self.world.update(self.timestep.secs());
 		if let Ok(ts_perc) = bincode::deserialize_from::<&net::TcpStream, TimestampedPerception>(&self.stream) {
 			use Perception::*;
 			match ts_perc.perception {
@@ -194,14 +195,13 @@ impl ClientGame {
 			}
 		}
 
-		self.world.update(self.timestep.secs());
 		self.timestep.reset();
 	}
 
 	fn generate_actions(&mut self) {
 		let turn_dir = *self.win_state.keymap.get(&VirtualKeyCode::A).unwrap_or(&false) as i32 - *self.win_state.keymap.get(&VirtualKeyCode::D).unwrap_or(&false) as i32;
 		if turn_dir != 0 {
-			let angle = turn_dir as f32 * 200.0 * self.timestep.secs();
+			let angle = turn_dir as f32 * 250.0 * self.timestep.secs();
 			let action = Action::TurnShip(angle);
 			let timestamp = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f64();
 			self.action_queue.push_back((timestamp, action.clone()));

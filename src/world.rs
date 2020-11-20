@@ -37,7 +37,7 @@ impl World {
 	}
 
 	pub fn render_to(&self, output_buffer : &mut Vec<Instance2D>, texture_map : &FnvHashMap<ClientTexture, GLvec4>) {
-		let ship_text = texture_map[&ClientTexture::Ship];
+		let ship_text = texture_map[&ClientTexture::Flat];
 		output_buffer.extend(
 			self.ships.iter().map(|ship| ship.render(ship_text))
 		);
@@ -77,6 +77,7 @@ impl Ship {
 		let mut instance = Instance2D::default();
 		instance.texture_coords = text_coords;
 		instance.translate = GLvec2(self.pos.0, self.pos.1);
+		instance.scale = GLvec2(0.5, 0.5);
 		instance.rotation = GLfloat(self.angle - 90.0);
 		instance
 	}

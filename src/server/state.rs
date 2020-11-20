@@ -64,7 +64,7 @@ impl Server {
 	}
 
 	pub fn accept(&mut self, n : usize) {
-		println!("listening on {:?}", net::SocketAddr::new(self.ip, utils::SERVER_PORT));
+		println!("Listening on {:?}", net::SocketAddr::new(self.ip, utils::SERVER_PORT));
 		for stream in self.listener.incoming() {
 			match stream {
 				Ok(client) => {
@@ -93,7 +93,7 @@ impl Server {
 				break;
 			}
 		}
-		println!("stopped listening on {:?}", net::SocketAddr::new(self.ip, utils::SERVER_PORT));
+		println!("Stopped listening on {:?}", net::SocketAddr::new(self.ip, utils::SERVER_PORT));
 		self.timestep.reset();
 	}
 
@@ -111,7 +111,7 @@ impl Server {
 			}
 		}
 
-		if self.authorative_ts.secs() > 50./1000. {
+		if self.authorative_ts.secs() > 100./1000. {
 			self.authorative_ts.reset();
 			for client in &self.clients {
 				client.authorative_send_to(Perception::World(self.world.clone()));
