@@ -1,4 +1,3 @@
-use std::time;
 use serde_derive::*;
 use fnv::FnvHashMap;
 
@@ -10,15 +9,12 @@ use crate::client::state::ClientTexture;
 
 #[derive(Serialize, Clone, Deserialize, Debug)]
 pub struct World {
-	pub timestamp  : f32,
 	pub ships : Vec<Ship>,
 }
 
 impl World {
 	pub fn new() -> Self {
-		let timestamp = time::UNIX_EPOCH.elapsed().unwrap().as_secs_f32();
 		Self {
-			timestamp,
 			ships : vec![],
 		}
 	}

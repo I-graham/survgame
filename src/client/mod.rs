@@ -16,7 +16,6 @@ pub fn client(address : &str) {
 		server_addr = net::SocketAddr::new("127.0.0.1".parse().unwrap(), utils::SERVER_PORT);
 	}
 
-
 	let event_loop = winit::event_loop::EventLoop::new();
 	let mut game_state = state::ClientGame::new(server_addr, None, None, &event_loop);
 

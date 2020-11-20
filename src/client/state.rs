@@ -3,7 +3,7 @@ use crate::reng;
 use crate::reng::types::*;
 use crate::utils;
 use crate::world::World;
-use crate::comms::{Action, Perception};
+use crate::comms::*;
 
 use std::net;
 use std::collections::VecDeque;
@@ -73,10 +73,12 @@ pub struct ClientGame {
 	pub timestep       : utils::Timer,
 	pub uniform        : types::Uniform,
 	pub instance_queue : Vec<types::Instance2D>,
-	pub action_queue   : VecDeque<(f32, Action)>,
+	pub action_queue   : VecDeque<(f64, Action)>,
 	pub texture_map    : FnvHashMap<ClientTexture, GLvec4>,
 	pub world          : World,
 	pub stream         : net::TcpStream,
+	pub last_received  : f64,
+	pub last_processed : f64,
 	pub id             : usize,
 }
 
@@ -105,11 +107,27 @@ impl ClientGame {
 		);
 
 		let id;
-		if let Perception::ID(player_id) = bincode::deserialize_from(&stream).expect("Unable to get data from server") {
+		let last_received;
+		if let TimestampedPerception {
+			perception : Perception::ID(player_id),
+			timestamp : first_ts,
+		} = bincode::deserialize_from(&stream).expect("Unable to get data from server") {
 			id = player_id as usize;
+			last_received = first_ts;
 		} else {
 			panic!("Unable to get ID from server.")
 		}
+
+		let world;
+		if let TimestampedPerception {
+			perception : Perception::World(init_world),
+			..
+		} = bincode::deserialize_from(&stream).expect("Unable to get data from server") {
+			world = init_world;
+		} else {
+			panic!("Unable to get world state from server.")
+		}
+
 		stream.set_nonblocking(true).expect("Unable to set nonblocking on TcpStream, that's odd...");
 		stream.set_nodelay(true).expect("Unable to set nodelay on TcpStream, that's odd...");
 
@@ -123,8 +141,10 @@ impl ClientGame {
 			instance_queue,
 			action_queue,
 			stream,
-			world : World::new(),
+			world,
 			id,
+			last_received,
+			last_processed : last_received,
 		}
 	}
 
@@ -146,20 +166,30 @@ impl ClientGame {
 	pub fn run(&mut self) {
 		self.generate_actions();
 
-		while let Some(action) = self.action_queue.front_mut() {
-			if action.0 < self.world.timestamp {
-				self.action_queue.pop_front();
+		for action in &self.action_queue {
+			if self.last_processed < action.0 {
+				self.world.process(self.id, &action.1);
+				self.last_processed = action.0;
 			}
 		}
 
-		for action in &self.action_queue {
-			self.world.process(self.id, &action.1);
-		}
-
-		if let Ok(perception) = bincode::deserialize_from(&self.stream) {
+		if let Ok(ts_perc) = bincode::deserialize_from::<&net::TcpStream, TimestampedPerception>(&self.stream) {
 			use Perception::*;
-			match perception {
-				World(world) => self.world = world,
+			match ts_perc.perception {
+				World(world) => {
+
+					self.world = world;
+					self.last_received = ts_perc.timestamp;
+					self.last_processed = ts_perc.timestamp;
+					while let Some(action) = self.action_queue.front() {
+						if action.0 <= self.last_received {
+							self.action_queue.pop_front();
+						} else {
+							break;
+						}
+					}
+
+				},
 				_ => (),
 			}
 		}
@@ -173,14 +203,17 @@ impl ClientGame {
 		if turn_dir != 0 {
 			let angle = turn_dir as f32 * 200.0 * self.timestep.secs();
 			let action = Action::TurnShip(angle);
-			self.world.process(self.id, &action);
-			self.send_to_server(&action);
-			let timestamp = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f32();
-			self.action_queue.push_back((timestamp, action));
+			let timestamp = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f64();
+			self.action_queue.push_back((timestamp, action.clone()));
+			let ts_act = TimestampedAction {
+				timestamp,
+				action,
+			};
+			self.send_to_server(&ts_act);
 		}
 	}
 
-	fn send_to_server(&mut self, action : &Action) {
-		bincode::serialize_into(&self.stream, &action).unwrap_or_else(|e| panic!("Unable to send data to server due to {:?}", e));
+	fn send_to_server(&mut self, ts_act : &TimestampedAction) {
+		bincode::serialize_into(&self.stream, &ts_act).unwrap_or_else(|e| panic!("Unable to send data to server due to {:?}", e));
 	}
 }

@@ -1,8 +1,7 @@
 use std::net;
-use std::time;
 use std::thread;
 use std::sync::mpsc;
-use comms::{Action, Perception};
+use comms::*;
 
 use crate::world;
 use crate::comms;
@@ -14,8 +13,8 @@ pub struct Server {
 	pub world           : world::World,
 	pub client_handlers : Vec<thread::JoinHandle<()>>,
 	pub clients         : Vec<comms::Client>,
-	pub sender          : mpsc::Sender<(usize, comms::Action)>,
-	pub receiver        : mpsc::Receiver<(usize, comms::Action)>,
+	pub sender          : mpsc::Sender<(usize, comms::TimestampedAction)>,
+	pub receiver        : mpsc::Receiver<(usize, comms::TimestampedAction)>,
 	pub timestep        : utils::Timer,
 	pub authorative_ts  : utils::Timer,
 }
@@ -43,7 +42,12 @@ impl Server {
 		}
 	}
 
-	pub fn handle_client(player_id : usize, client : net::TcpStream, sender : mpsc::Sender<(usize, comms::Action)>) {
+	pub fn handle_client(player_id : usize, client : net::TcpStream, sender : mpsc::Sender<(usize, comms::TimestampedAction)>) {
+
+		const DISCONNECT : TimestampedAction = TimestampedAction {
+			timestamp : 0.0,
+			action : Action::Disconnect
+		};
 
 		let mut incoming_data = bincode::deserialize_from(&client);
 		while let Ok(action) = incoming_data {
@@ -51,10 +55,10 @@ impl Server {
 			incoming_data = bincode::deserialize_from(&client);
 		}
 		if let Err(_) = incoming_data {
-			sender.send((player_id, Action::Disconnect)).expect("Server already closed.");
+			sender.send((player_id, DISCONNECT)).expect("Server already closed.");
 		}
 
-		sender.send((player_id, Action::Disconnect)).expect("Server already closed.");
+		sender.send((player_id, DISCONNECT)).expect("Server already closed.");
 		println!("Connection closed with {:?}", client);
 
 	}
@@ -76,8 +80,9 @@ impl Server {
 
 					self.client_handlers.push(join_handle);
 					let player_client = comms::Client::new(client);
-					player_client.authorative_send_to(&Perception::ID(player_id as i32));
+					player_client.authorative_send_to(Perception::ID(player_id as i32));
 					self.clients.push(player_client);
+					self.world.ships.push(world::Ship::new());
 
 				},
 				Err(e) => {
@@ -97,19 +102,19 @@ impl Server {
 		self.world.update(timestep);
 
 		while let Ok(action) = self.receiver.try_recv() {
+			self.clients[action.0].timestamp = action.1.timestamp;
+
 			use Action::*;
-			match action.1 {
+			match action.1.action {
 				Disconnect => self.clients[action.0].disconnect(),
-				_ => self.world.process(action.0, &action.1),
+				_ => self.world.process(action.0, &action.1.action),
 			}
 		}
 
-
-		if self.authorative_ts.secs() > 0.5/10. {
+		if self.authorative_ts.secs() > 50./1000. {
 			self.authorative_ts.reset();
 			for client in &self.clients {
-				self.world.timestamp = time::UNIX_EPOCH.elapsed().unwrap().as_secs_f32();
-				client.authorative_send_to(&Perception::World(self.world.clone()));
+				client.authorative_send_to(Perception::World(self.world.clone()));
 			}
 		}
 

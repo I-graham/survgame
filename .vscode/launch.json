@@ -9,7 +9,7 @@
 			"type": "cppvsdbg",
 			"request": "launch",
             "program": "${workspaceFolder}/target/debug/${workspaceFolderBasename}",
-			"args": ["host"],
+			"args": ["local"],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
 			"environment": [],

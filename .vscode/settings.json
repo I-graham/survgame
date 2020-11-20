@@ -5,7 +5,6 @@
     ".vs": true,
     "src\\reng\\shaders\\default.frag.spv": true,
     "src\\reng\\shaders\\default.vert.spv": true,
-    "target": true,
-    ".vscode": true
+    "target": true
   }
 }
