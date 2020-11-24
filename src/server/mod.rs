@@ -6,7 +6,7 @@ pub fn server() {
 
 	let mut server = state::Server::new();
 
-	server.accept(2);
+	server.accept(1);
 
 	while server.online() {
 		server.process();

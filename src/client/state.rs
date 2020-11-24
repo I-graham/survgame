@@ -199,8 +199,9 @@ impl ClientGame {
 	}
 
 	fn generate_actions(&mut self) {
+		let player_ship = self.world.ships.get(self.id).unwrap();
 		let turn_dir = *self.win_state.keymap.get(&VirtualKeyCode::A).unwrap_or(&false) as i8 - *self.win_state.keymap.get(&VirtualKeyCode::D).unwrap_or(&false) as i8;
-		if turn_dir != 0 {
+		if turn_dir != player_ship.turning {
 			let action = Action::TurnShip(turn_dir);
 			let timestamp = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f64();
 			let ts_act = TimestampedAction {
