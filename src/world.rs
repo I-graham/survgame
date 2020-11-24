@@ -70,6 +70,7 @@ impl Ship {
 	pub fn update(&mut self, timestep : f32) {
 
 		self.angle += self.turning as f32 * timestep * 250.0;
+		self.angle %= 360.0;
 
 		self.vel.0 += self.acc.0 * timestep;
 		self.vel.1 += self.acc.1 * timestep;
