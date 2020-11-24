@@ -54,8 +54,7 @@ void main() {
 	vec2 coord = positions[index];
 
     vec2 pos = rotv2(coord, inst.rotation) * inst.scale + inst.translate;
-    gl_Position = ortho * vec4(pos, inst.z_coord, 1.0);
+	gl_Position = ortho * vec4(pos, inst.z_coord, 1.0);
 	text_coords = inst_text_coords[index];
 	color_tint  = inst.tint;
-
 }

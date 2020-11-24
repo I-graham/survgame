@@ -97,7 +97,7 @@ impl Server {
 		self.timestep.reset();
 	}
 
-	pub fn process(&mut self) -> bool {
+	pub fn process(&mut self) {
 		let timestep = self.timestep.reset();
 		self.world.update(timestep);
 
@@ -111,14 +111,18 @@ impl Server {
 			}
 		}
 
-		if self.authorative_ts.secs() > 100./1000. {
+		if self.authorative_ts.secs() > 50./1000. {
 			self.authorative_ts.reset();
-			for client in &self.clients {
+			for client in self.clients.iter().filter(|x| x.online) {
 				client.authorative_send_to(Perception::World(self.world.clone()));
 			}
 		}
 
+	}
+
+	pub fn online(&self) -> bool {
 		if self.clients.iter().any(|c| c.online) { true } else { false }
 	}
+
 }
 

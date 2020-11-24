@@ -73,7 +73,7 @@ pub struct ClientGame {
 	pub timestep       : utils::Timer,
 	pub uniform        : types::Uniform,
 	pub instance_queue : Vec<types::Instance2D>,
-	pub action_queue   : VecDeque<(f64, Action)>,
+	pub action_queue   : VecDeque<TimestampedAction>,
 	pub texture_map    : FnvHashMap<ClientTexture, GLvec4>,
 	pub world          : World,
 	pub stream         : net::TcpStream,
@@ -167,9 +167,9 @@ impl ClientGame {
 		self.generate_actions();
 
 		for action in &self.action_queue {
-			if self.last_processed < action.0 {
-				self.world.process(self.id, &action.1);
-				self.last_processed = action.0;
+			if self.last_processed < action.timestamp {
+				self.world.process(self.id, &action.action);
+				self.last_processed = action.timestamp;
 			}
 		}
 
@@ -183,7 +183,7 @@ impl ClientGame {
 					self.last_received = ts_perc.timestamp;
 					self.last_processed = ts_perc.timestamp;
 					while let Some(action) = self.action_queue.front() {
-						if action.0 <= self.last_received {
+						if action.timestamp <= self.last_received {
 							self.action_queue.pop_front();
 						} else {
 							break;
@@ -199,16 +199,15 @@ impl ClientGame {
 	}
 
 	fn generate_actions(&mut self) {
-		let turn_dir = *self.win_state.keymap.get(&VirtualKeyCode::A).unwrap_or(&false) as i32 - *self.win_state.keymap.get(&VirtualKeyCode::D).unwrap_or(&false) as i32;
+		let turn_dir = *self.win_state.keymap.get(&VirtualKeyCode::A).unwrap_or(&false) as i8 - *self.win_state.keymap.get(&VirtualKeyCode::D).unwrap_or(&false) as i8;
 		if turn_dir != 0 {
-			let angle = turn_dir as f32 * 250.0 * self.timestep.secs();
-			let action = Action::TurnShip(angle);
+			let action = Action::TurnShip(turn_dir);
 			let timestamp = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f64();
-			self.action_queue.push_back((timestamp, action.clone()));
 			let ts_act = TimestampedAction {
 				timestamp,
 				action,
 			};
+			self.action_queue.push_back(ts_act.clone());
 			self.send_to_server(&ts_act);
 		}
 	}

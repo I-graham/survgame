@@ -6,7 +6,7 @@ use crate::world;
 pub enum Action {
 	Disconnect,
 	Message(String),
-	TurnShip(f32),
+	TurnShip(i8),
 }
 
 #[derive(Serialize, Clone, Deserialize, Debug)]
@@ -27,6 +27,7 @@ pub struct TimestampedPerception {
 	pub perception : Perception,
 }
 
+#[derive(Debug)]
 pub struct Client {
 	pub stream : net::TcpStream,
 	pub timestamp : f64,

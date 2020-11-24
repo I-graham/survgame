@@ -1,6 +1,6 @@
 #version 450
 layout(location=0) in vec2 text_coords;
-layout(location=1) in vec4 color_tint;
+layout(location=1) flat in vec4 color_tint;
 
 layout(location=0) out vec4 out_color;
 

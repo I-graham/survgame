@@ -23,8 +23,8 @@ impl World {
 		use comms::Action::*;
 		let player_ship = self.ships.get_mut(player_id).unwrap();
 		match action {
-			TurnShip(theta) => {
-				player_ship.angle += theta;
+			TurnShip(dir) => {
+				player_ship.turning = *dir;
 			},
 			_ => unimplemented!(),
 		}
@@ -37,7 +37,7 @@ impl World {
 	}
 
 	pub fn render_to(&self, output_buffer : &mut Vec<Instance2D>, texture_map : &FnvHashMap<ClientTexture, GLvec4>) {
-		let ship_text = texture_map[&ClientTexture::Flat];
+		let ship_text = texture_map[&ClientTexture::Ship];
 		output_buffer.extend(
 			self.ships.iter().map(|ship| ship.render(ship_text))
 		);
@@ -48,6 +48,7 @@ impl World {
 pub struct Ship {
 	pub alive : bool,
 	pub angle : f32,
+	pub turning : i8,
 	pub pos : (f32, f32),
 	pub vel : (f32, f32),
 	pub acc : (f32, f32),
@@ -59,6 +60,7 @@ impl Ship {
 		Self {
 			alive : true,
 			angle : 0.0,
+			turning : 0i8,
 			pos : (0.0,0.0),
 			vel : (0.0,0.0),
 			acc : (0.0,0.0),
@@ -66,6 +68,9 @@ impl Ship {
 	}
 
 	pub fn update(&mut self, timestep : f32) {
+
+		self.angle += self.turning as f32 * timestep * 250.0;
+
 		self.vel.0 += self.acc.0 * timestep;
 		self.vel.1 += self.acc.1 * timestep;
 
