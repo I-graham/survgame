@@ -174,7 +174,8 @@ impl ClientGame {
 		}
 
 		self.world.update(self.timestep.secs());
-		if let Ok(ts_perc) = bincode::deserialize_from::<&net::TcpStream, TimestampedPerception>(&self.stream) {
+		let perception = bincode::deserialize_from::<&net::TcpStream, TimestampedPerception>(&self.stream);
+		if let Ok(ts_perc) = perception {
 			use Perception::*;
 			match ts_perc.perception {
 				World(world) => {
@@ -192,6 +193,14 @@ impl ClientGame {
 
 				},
 				_ => (),
+			}
+		} else if let Err(err) = perception {
+			if let bincode::ErrorKind::Io(e) = *err {
+				if e.kind() != std::io::ErrorKind::WouldBlock {
+					dbg!(e.kind());
+				}
+			} else {
+				dbg!(err);
 			}
 		}
 

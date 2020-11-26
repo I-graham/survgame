@@ -29,15 +29,15 @@ pub struct TimestampedPerception {
 
 #[derive(Debug)]
 pub struct Client {
-	pub stream : net::TcpStream,
+	pub tcpstream : net::TcpStream,
 	pub timestamp : f64,
 	pub online : bool,
 }
 
 impl Client {
-	pub fn new(stream : net::TcpStream) -> Self {
+	pub fn new(tcpstream : net::TcpStream) -> Self {
 		Self {
-			stream,
+			tcpstream,
 			timestamp : std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f64(),
 			online : true,
 		}
@@ -48,12 +48,12 @@ impl Client {
 			timestamp : self.timestamp,
 			perception,
 		};
-		bincode::serialize_into(&self.stream, &ts_perc).expect("unable to serialize world state.");
+		bincode::serialize_into(&self.tcpstream, &ts_perc).expect("unable to serialize world state.");
 	}
 
 	pub fn disconnect(&mut self) {
 		self.online = false;
-		let _ = self.stream.shutdown(net::Shutdown::Both);
+		let _ = self.tcpstream.shutdown(net::Shutdown::Both);
 	}
 
 }

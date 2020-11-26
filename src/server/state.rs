@@ -77,8 +77,8 @@ impl Server {
 					let join_handle = thread::spawn(move || {
 						Self::handle_client(player_id, cloned_client, cloned_sender);
 					});
-
 					self.client_handlers.push(join_handle);
+
 					let player_client = comms::Client::new(client);
 					player_client.authorative_send_to(Perception::ID(player_id as i32));
 					self.clients.push(player_client);
