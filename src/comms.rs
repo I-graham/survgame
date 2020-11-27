@@ -1,5 +1,6 @@
 use serde_derive::*;
 use std::net;
+use std::marker::PhantomData;
 use crate::world;
 
 #[derive(Serialize, Clone, Deserialize, Debug)]
@@ -17,7 +18,7 @@ pub struct TimestampedAction {
 
 #[derive(Serialize, Clone, Deserialize, Debug)]
 pub enum Perception {
-	ID(i32),
+	ID(usize),
 	World(world::World)
 }
 
@@ -27,33 +28,82 @@ pub struct TimestampedPerception {
 	pub perception : Perception,
 }
 
-#[derive(Debug)]
-pub struct Client {
-	pub tcpstream : net::TcpStream,
+#[derive(Clone, Debug)]
+pub struct ClientComm {
+	pub stream : TypedStream<TimestampedPerception, TimestampedAction>,
 	pub timestamp : f64,
 	pub online : bool,
 }
 
-impl Client {
+impl ClientComm {
 	pub fn new(tcpstream : net::TcpStream) -> Self {
-		Self {
-			tcpstream,
+		ClientComm {
+			stream : TypedStream::new(tcpstream),
 			timestamp : std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f64(),
 			online : true,
 		}
 	}
 
-	pub fn authorative_send_to(&self, perception : Perception) {
+	pub fn authorative_send(&self, perception : Perception) {
 		let ts_perc = TimestampedPerception {
 			timestamp : self.timestamp,
 			perception,
 		};
-		bincode::serialize_into(&self.tcpstream, &ts_perc).expect("unable to serialize world state.");
+		self.stream.send(&ts_perc);
+	}
+
+	pub fn recv(&mut self) -> Result<TimestampedAction, bincode::ErrorKind>  {
+		self.stream.recv()
 	}
 
 	pub fn disconnect(&mut self) {
 		self.online = false;
-		let _ = self.tcpstream.shutdown(net::Shutdown::Both);
+		self.stream.shutdown();
 	}
 
+}
+
+#[derive(Debug)]
+pub struct TypedStream<S : serde::de::DeserializeOwned + serde::Serialize, R : serde::de::DeserializeOwned + serde::Serialize> {
+	pub stream  : net::TcpStream,
+	recv_buffer : Vec<u8>,
+	marker      : PhantomData<(S, R)>,
+}
+
+impl<S : serde::de::DeserializeOwned + serde::Serialize, R : serde::de::DeserializeOwned + serde::Serialize> TypedStream<S, R> {
+	pub fn new(stream : net::TcpStream) -> Self {
+		stream.set_nonblocking(true).unwrap();
+		Self {
+			stream,
+			recv_buffer : vec![],
+			marker : PhantomData,
+		}
+	}
+
+	pub fn send(&self, send : &S) {
+		bincode::serialize_into(&self.stream, send).unwrap();
+	}
+
+	pub fn recv(&mut self) -> Result<R, bincode::ErrorKind> {
+		use std::io::Read;
+		self.stream.read_to_end(&mut self.recv_buffer).map_err(|err| bincode::ErrorKind::Io(err))?;
+		let recv = bincode::deserialize_from(self.recv_buffer.as_slice()).map_err(|err| *err)?;
+		let size = bincode::serialized_size(&recv).map_err(|err| *err)?;
+		self.recv_buffer.drain(0usize..size as usize);
+		Ok(recv)
+	}
+
+	pub fn shutdown(&mut self) {
+		let _ = self.stream.shutdown(net::Shutdown::Both);
+	}
+}
+
+impl<S : serde::de::DeserializeOwned + serde::Serialize, R : serde::de::DeserializeOwned + serde::Serialize> Clone for TypedStream<S, R> {
+	fn clone(&self) -> Self {
+		Self {
+			stream : self.stream.try_clone().unwrap(),
+			recv_buffer : vec![],
+			..*self
+		}
+	}
 }

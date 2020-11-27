@@ -12,7 +12,7 @@ pub struct Server {
 	pub listener        : net::TcpListener,
 	pub world           : world::World,
 	pub client_handlers : Vec<thread::JoinHandle<()>>,
-	pub clients         : Vec<comms::Client>,
+	pub clients         : Vec<comms::ClientComm>,
 	pub sender          : mpsc::Sender<(usize, comms::TimestampedAction)>,
 	pub receiver        : mpsc::Receiver<(usize, comms::TimestampedAction)>,
 	pub timestep        : utils::Timer,
@@ -42,23 +42,30 @@ impl Server {
 		}
 	}
 
-	pub fn handle_client(player_id : usize, client : net::TcpStream, sender : mpsc::Sender<(usize, comms::TimestampedAction)>) {
+	pub fn handle_client(player_id : usize, mut client : ClientComm, sender : mpsc::Sender<(usize, comms::TimestampedAction)>) {
 
 		const DISCONNECT : TimestampedAction = TimestampedAction {
 			timestamp : 0.0,
 			action : Action::Disconnect
 		};
 
-		let mut incoming_data = bincode::deserialize_from(&client);
-		while let Ok(action) = incoming_data {
-			sender.send((player_id, action)).expect("Server must have crashed.");
-			incoming_data = bincode::deserialize_from(&client);
-		}
-		if let Err(_) = incoming_data {
-			sender.send((player_id, DISCONNECT)).expect("Server already closed.");
+		client.authorative_send(Perception::ID(player_id));
+
+		loop {
+			match client.recv() {
+				Ok(action) => {
+					sender.send((player_id, action)).expect("Server must have crashed.");
+				},
+
+				Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::WouldBlock => (),
+				Err(err) => {
+					sender.send((player_id, DISCONNECT)).expect("Server already closed.");
+					println!("Error '{:?}' from '{:?}'.", err, client);
+					break;
+				},
+			}
 		}
 
-		sender.send((player_id, DISCONNECT)).expect("Server already closed.");
 		println!("Connection closed with {:?}", client);
 
 	}
@@ -71,16 +78,15 @@ impl Server {
 
 					println!("New connection: {:?}", client);
 
+					let player_client = comms::ClientComm::new(client);
+
 					let cloned_sender = self.sender.clone();
-					let cloned_client = client.try_clone().unwrap();
+					let cloned_client = player_client.clone();
 					let player_id = self.client_handlers.len();
 					let join_handle = thread::spawn(move || {
 						Self::handle_client(player_id, cloned_client, cloned_sender);
 					});
 					self.client_handlers.push(join_handle);
-
-					let player_client = comms::Client::new(client);
-					player_client.authorative_send_to(Perception::ID(player_id as i32));
 					self.clients.push(player_client);
 					self.world.ships.push(world::Ship::new());
 
@@ -107,14 +113,14 @@ impl Server {
 			use Action::*;
 			match action.1.action {
 				Disconnect => self.clients[action.0].disconnect(),
-				_ => self.world.process(action.0, &action.1.action),
+				act => self.world.process(action.0, &act),
 			}
 		}
 
 		if self.authorative_ts.secs() > 50./1000. {
 			self.authorative_ts.reset();
 			for client in self.clients.iter().filter(|x| x.online) {
-				client.authorative_send_to(Perception::World(self.world.clone()));
+				client.authorative_send(Perception::World(self.world.clone()));
 			}
 		}
 

@@ -76,7 +76,7 @@ pub struct ClientGame {
 	pub action_queue   : VecDeque<TimestampedAction>,
 	pub texture_map    : FnvHashMap<ClientTexture, GLvec4>,
 	pub world          : World,
-	pub stream         : net::TcpStream,
+	pub server         : TypedStream<TimestampedAction, TimestampedPerception>,
 	pub last_received  : f64,
 	pub last_processed : f64,
 	pub id             : usize,
@@ -102,34 +102,29 @@ impl ClientGame {
 
 		let instance_queue = vec![];
 
-		let stream = net::TcpStream::connect(address).unwrap_or_else(
-			|err| panic!("unable to connect to server at {:?}, due to the following error : {:?}", address, err)
-		);
+		let stream = net::TcpStream::connect(address).expect("Unable to connect to server");
 
 		let id;
-		let last_received;
 		if let TimestampedPerception {
 			perception : Perception::ID(player_id),
-			timestamp : first_ts,
+			..
 		} = bincode::deserialize_from(&stream).expect("Unable to get data from server") {
 			id = player_id as usize;
-			last_received = first_ts;
 		} else {
 			panic!("Unable to get ID from server.")
 		}
 
 		let world;
+		let last_received;
 		if let TimestampedPerception {
 			perception : Perception::World(init_world),
-			..
+			timestamp,
 		} = bincode::deserialize_from(&stream).expect("Unable to get data from server") {
 			world = init_world;
+			last_received = timestamp;
 		} else {
 			panic!("Unable to get world state from server.")
 		}
-
-		stream.set_nonblocking(true).expect("Unable to set nonblocking on TcpStream, that's odd...");
-		stream.set_nodelay(true).expect("Unable to set nodelay on TcpStream, that's odd...");
 
 		let timestep  = utils::Timer::new();
 		ClientGame {
@@ -140,7 +135,7 @@ impl ClientGame {
 			texture_map,
 			instance_queue,
 			action_queue,
-			stream,
+			server : TypedStream::new(stream),
 			world,
 			id,
 			last_received,
@@ -174,34 +169,33 @@ impl ClientGame {
 		}
 
 		self.world.update(self.timestep.secs());
-		let perception = bincode::deserialize_from::<&net::TcpStream, TimestampedPerception>(&self.stream);
-		if let Ok(ts_perc) = perception {
-			use Perception::*;
-			match ts_perc.perception {
-				World(world) => {
 
-					self.world = world;
-					self.last_received = ts_perc.timestamp;
-					self.last_processed = ts_perc.timestamp;
-					while let Some(action) = self.action_queue.front() {
-						if action.timestamp <= self.last_received {
-							self.action_queue.pop_front();
-						} else {
-							break;
+		match self.server.recv() {
+			Ok(ts_perc) => {
+				use Perception::*;
+				match ts_perc.perception {
+					World(world) => {
+						self.world = world;
+						self.last_received = ts_perc.timestamp;
+						self.last_processed = ts_perc.timestamp;
+						while let Some(action) = self.action_queue.front() {
+							if action.timestamp <= self.last_received {
+								self.action_queue.pop_front();
+							} else {
+								break;
+							}
 						}
-					}
 
-				},
-				_ => (),
-			}
-		} else if let Err(err) = perception {
-			if let bincode::ErrorKind::Io(e) = *err {
-				if e.kind() != std::io::ErrorKind::WouldBlock {
-					dbg!(e.kind());
+					},
+					_ => (),
 				}
-			} else {
-				dbg!(err);
-			}
+			},
+
+			Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::WouldBlock => (),
+
+			Err(err) => {
+				panic!(err);
+			},
 		}
 
 		self.timestep.reset();
@@ -218,11 +212,7 @@ impl ClientGame {
 				action,
 			};
 			self.action_queue.push_back(ts_act.clone());
-			self.send_to_server(&ts_act);
+			self.server.send(&ts_act);
 		}
-	}
-
-	fn send_to_server(&mut self, ts_act : &TimestampedAction) {
-		bincode::serialize_into(&self.stream, &ts_act).unwrap_or_else(|e| panic!("Unable to send data to server due to {:?}", e));
 	}
 }
