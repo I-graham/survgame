@@ -194,7 +194,7 @@ impl ClientGame {
 			Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::WouldBlock => (),
 
 			Err(err) => {
-				panic!(err);
+				panic!("{:?}", err);
 			},
 		}
 
