@@ -57,6 +57,7 @@ impl ClientComm {
 	}
 
 	pub fn disconnect(&mut self) {
+		dbg!("There's a disconnect here!");
 		self.online = false;
 		self.stream.shutdown();
 	}

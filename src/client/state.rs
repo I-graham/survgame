@@ -170,33 +170,35 @@ impl ClientGame {
 
 		self.world.update(self.timestep.secs());
 
-		match self.server.recv() {
-			Ok(ts_perc) => {
-				use Perception::*;
-				match ts_perc.perception {
-					World(world) => {
-						self.world = world;
-						self.last_received = ts_perc.timestamp;
-						self.last_processed = ts_perc.timestamp;
-						while let Some(action) = self.action_queue.front() {
-							if action.timestamp <= self.last_received {
-								self.action_queue.pop_front();
-							} else {
-								break;
+		loop {
+			match self.server.recv() {
+				Ok(ts_perc) => {
+					use Perception::*;
+					match ts_perc.perception {
+						World(world) => {
+							self.world = world;
+							self.last_received = ts_perc.timestamp;
+							self.last_processed = ts_perc.timestamp;
+							while let Some(action) = self.action_queue.front() {
+								if action.timestamp <= self.last_received {
+									self.action_queue.pop_front();
+								} else {
+									break;
+								}
 							}
-						}
 
-					},
-					_ => (),
-				}
-			},
+						},
+						_ => (),
+					}
+				},
 
-			Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::WouldBlock => (),
-			Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::UnexpectedEof => (),
+				Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::WouldBlock => break,
+				Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::UnexpectedEof => break,
 
-			Err(err) => {
-				panic!("{:?}", err);
-			},
+				Err(err) => {
+					panic!("{:?}", err);
+				},
+			}
 		}
 
 		self.timestep.reset();
