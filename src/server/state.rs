@@ -58,6 +58,7 @@ impl Server {
 				},
 
 				Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::WouldBlock => (),
+				Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::UnexpectedEof => (),
 				Err(err) => {
 					sender.send((player_id, DISCONNECT)).expect("Server already closed.");
 					println!("Error '{:?}' from '{:?}'.", err, client);

@@ -70,7 +70,7 @@ pub struct TypedStream<S : serde::de::DeserializeOwned + serde::Serialize, R : s
 	marker      : PhantomData<(S, R)>,
 }
 
-impl<S : serde::de::DeserializeOwned + serde::Serialize, R : serde::de::DeserializeOwned + serde::Serialize> TypedStream<S, R> {
+impl<S : serde::de::DeserializeOwned + serde::Serialize, R : serde::de::DeserializeOwned + serde::Serialize + std::fmt::Debug> TypedStream<S, R> {
 	pub fn new(stream : net::TcpStream) -> Self {
 		stream.set_nonblocking(true).unwrap();
 		Self {
@@ -86,10 +86,19 @@ impl<S : serde::de::DeserializeOwned + serde::Serialize, R : serde::de::Deserial
 
 	pub fn recv(&mut self) -> Result<R, bincode::ErrorKind> {
 		use std::io::Read;
-		self.stream.read_to_end(&mut self.recv_buffer).map_err(|err| bincode::ErrorKind::Io(err))?;
-		let recv = bincode::deserialize_from(self.recv_buffer.as_slice()).map_err(|err| *err)?;
+		let mut buff = [10u8; 256];
+		loop {
+			match self.stream.read(&mut buff) {
+				Ok(n) => {
+					self.recv_buffer.extend(&buff[..n]);
+					if n < 256 { break }
+				},
+				Err(err) => return Err(bincode::ErrorKind::Io(err)),
+			}
+		}
+		let recv = bincode::deserialize(&self.recv_buffer).map_err(|err| *err)?;
 		let size = bincode::serialized_size(&recv).map_err(|err| *err)?;
-		self.recv_buffer.drain(0usize..size as usize);
+		self.recv_buffer.drain(..size as usize);
 		Ok(recv)
 	}
 
