@@ -192,6 +192,7 @@ impl ClientGame {
 			},
 
 			Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::WouldBlock => (),
+			Err(bincode::ErrorKind::Io(err)) if err.kind() == std::io::ErrorKind::UnexpectedEof => (),
 
 			Err(err) => {
 				panic!("{:?}", err);
